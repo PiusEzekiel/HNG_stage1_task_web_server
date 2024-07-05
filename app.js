@@ -17,11 +17,29 @@ const GEO_API_URL = 'https://api.ipgeolocation.io/ipgeo';
 // API endpoint
 app.get('/api/hello', async (req, res) => {
   const visitorName = req.query.visitor_name;
-  const clientIp = req.socket.remoteAddress.slice(7); // Remove "::ffff:" prefix
+
+  // Get IP from X-Forwarded-For header, if available
+  let clientIp = req.headers['x-forwarded-for'];
+
+  // If X-Forwarded-For is not available, use req.socket.remoteAddress as a fallback
+  if (!clientIp) {
+    clientIp = req.socket.remoteAddress;
+  }
+
+  // If still no IP, send an error response
+  if (!clientIp) {
+    return res.status(400).json({ error: 'Unable to determine client IP address.' });
+  }
 
   try {
     // Fetch the visitor's location based on IP address
     const geoResponse = await axios.get(`${GEO_API_URL}?apiKey=${GEO_API_KEY}&ip=${clientIp}`);
+
+    // Check for API errors
+    if (geoResponse.status !== 200) {
+      throw new Error(geoResponse.data.message);
+    }
+
     const { city } = geoResponse.data;
     const location = `${city}`;
 
@@ -38,7 +56,7 @@ app.get('/api/hello', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching weather or geolocation data:', error);
-    res.status(500).json({ error: 'Failed to fetch data.' });
+    res.status(500).json({ error: error.message });
   }
 });
 
